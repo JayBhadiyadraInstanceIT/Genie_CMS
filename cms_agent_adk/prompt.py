@@ -358,6 +358,7 @@ instruction = f"""
                 • `is_del: false`
             - Default `limit` to 3 unless user explicitly requests "all" or "no limit".
             - Do not set `limit = 0` by your side.
+            - If user has specifically said any field name then apply the projection and retrive that field data only not all the data, and for that build the searching query accordingly.
 
             Date handling for RERA possession dates:
             - Interpret relative date terms:
