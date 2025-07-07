@@ -1,0 +1,15 @@
+google-adk
+google-genai==1.21.1
+a2a-sdk
+nest_asyncio
+python-dotenv
+asyncclick
+PyJWT
+jwcrypto
+uvicorn
+websockets==15.0.1
+streamlit 
+pyaudio 
+sseclient
+google-generativeai
+pydub
