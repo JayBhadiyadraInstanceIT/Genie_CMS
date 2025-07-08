@@ -6,6 +6,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from typing import Dict
 from prompt import instruction
+from lmnr import observe
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from constants import (
@@ -15,7 +16,7 @@ from constants import (
     REMOTE_1_AGENT_NAME,
     )
 
-
+@observe()
 def get_mongodb(collection: str, filter: str, limit: int) -> Dict:
     """
     Fetch data from MongoDB via the Node.js API using the provided query parameters.

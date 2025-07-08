@@ -1,4 +1,5 @@
 import asyncio
+import os
 import logging
 from collections.abc import AsyncGenerator
 
@@ -19,10 +20,14 @@ from a2a.utils.errors import ServerError
 from google.adk import Runner
 from google.adk.events import Event
 from google.genai import types
+from lmnr import Laminar, observe
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+load_dotenv()
+Laminar.initialize()
 
 class RealEstateAgentExecutor(AgentExecutor):
     """AgentExecutor for real-estate CMS queries across multiple project tables."""
@@ -38,12 +43,21 @@ class RealEstateAgentExecutor(AgentExecutor):
             session_id=session_id, user_id="cms_agent", new_message=new_message
         )
 
+    @observe()
     async def _process_request(
         self,
         new_message: types.Content,
         session_id: str,
         task_updater: TaskUpdater,
+        context: RequestContext,
     ) -> None:
+        Laminar.set_trace_session_id(session_id=context.context_id)
+        Laminar.set_trace_metadata({
+            "agent_role": "remote",
+            "agent_name": "CMS_Agent",
+            "session_id": context.context_id,
+            "task_id": context.task_id
+            })
         session_obj = await self._upsert_session(session_id)
         session_id = session_obj.id
 
@@ -91,6 +105,7 @@ class RealEstateAgentExecutor(AgentExecutor):
             ),
             context.context_id,
             updater,
+            context,
         )
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue):
