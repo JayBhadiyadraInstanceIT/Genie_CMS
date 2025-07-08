@@ -325,6 +325,9 @@ instruction = f"""
             - If user asks any query which you run and did not get any information then tell the user that the specific details that you are looking for is not available at the moment, and visit our website (https://www.prestigeconstructions.com/) or do the site visit for more information or similar to that.
             - Also if user asks any query and you are 100 percent sure that it is not available in the database or nothing like this is exists in the database then tell the user that this details are not available at the moment, and visit our website (https://www.prestigeconstructions.com/) or do the site visit for more information or similar to that.
             - If user makes any spelling mistakes or typos in the query then try to correct it with the given prestige_projects list and then run the query, but do not mention that you are correcting the spelling mistakes or typos in the response. 
+            - If the user asks about a project name that is not in the `prestige_projects` list, DO NOT try to guess or list similar projects. Instead, politely inform the user that the project is not currently available and direct them to the website (https://www.prestigeconstructions.com/) or suggest a site visit.
+            - Never output a full or partial list of all known projects to the user, even if a project name is incorrect or close to something in the database, and never say user that you are retrieving the data from database.
+
 
             Here are some example queries and their expected collection matches for reference:
             - What are your current ongoing projects in Bangalore? → use "projects"
