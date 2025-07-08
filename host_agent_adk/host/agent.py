@@ -26,6 +26,7 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService, DatabaseSessionService
 from google.adk.tools.tool_context import ToolContext
 from google.genai import types
+from lmnr import Laminar, observe
 
 from .remote_agent_connection import RemoteAgentConnections
 from .prompt import get_prompt
@@ -40,14 +41,15 @@ from constants import (
 
 load_dotenv()
 nest_asyncio.apply()
+Laminar.initialize()
 
 
 class HostAgent:
     """The Host agent."""
 
     ACCESS_MAP = {
-        "new customer": ["AgentA", "AgentB"],
-        "existing prospect": [REMOTE_1_AGENT_NAME, "AgentB", "AgentC"],
+        "new customer": [REMOTE_1_AGENT_NAME, "AgentB"],
+        "existing prospect": ["AgentA", "AgentB", "AgentC"],
         "existing customer": ["AgentA", "AgentB", "AgentC", "AgentD", "AgentE"],
     }
 
@@ -114,6 +116,7 @@ class HostAgent:
         return get_prompt(self.agents)
     
 
+    @observe()
     async def stream(
         self, query: str, session_id: str
     ) -> AsyncIterable[dict[str, Any]]:
@@ -206,7 +209,15 @@ class HostAgent:
         message_request = SendMessageRequest(
             id=message_id, params=MessageSendParams.model_validate(payload)
         )
-        send_response: SendMessageResponse = await client.send_message(message_request)
+        with Laminar.start_as_current_span(name="host_to_remote", tags=["a2a"]):
+            Laminar.set_trace_session_id(session_id=context_id)
+            Laminar.set_trace_metadata({
+                "agent_role": "host",
+                "agent_name": "HostAgent",
+                "target_agent": agent_name,
+                "session_id": context_id,
+            })
+            send_response: SendMessageResponse = await client.send_message(message_request)
         print("send_response", send_response)
 
         if not isinstance(

@@ -17,5 +17,6 @@ dependencies = [
     "uvicorn",
     "google-generativeai",
     "httpx",
+    "lmnr",
 
 ]
