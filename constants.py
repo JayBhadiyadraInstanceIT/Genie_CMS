@@ -4,7 +4,7 @@ REMOTE_1_AGENT_HOST = "localhost"
 REMOTE_1_AGENT_PORT = 10002
 REMOTE_1_AGENT_URL = "http://localhost:10002"
 REMOTE_1_AGENT_DEFAULT_USER_ID = "database_agent_user"
-REMOTE_1_AGENT_DATABASE_API_URL = "http://192.168.1.161:5001/listalltabledata"
+REMOTE_1_AGENT_DATABASE_API_URL = "http://192.168.1.85:5001/listalltabledata"
 REMOTE_1_AGENT_DATABASE_DBNAME = "dev_cms"
 # REMOTE_1_AGENT_DATABASE_DBNAME = "cms_prod"
 

@@ -1,0 +1,31 @@
+from pydantic import BaseModel, ConfigDict
+from typing import Any, Dict, Optional, List
+
+
+class StatePayload(BaseModel):
+    state: Dict[str, Any]
+
+class CustomStreamRequest(BaseModel):
+    text: str
+
+class CreateSessionPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_id: str
+    session_id: Optional[str] = None
+    state: Optional[Dict[str, Any]] = None
+
+class ChatPayload(BaseModel):
+    text: str
+
+class Part(BaseModel):
+    text: str
+
+class ChatMessage(BaseModel):
+    role: str
+    parts: List[Part]
+
+class ChatRequest(BaseModel):
+    app_name: str
+    user_id: str
+    session_id: str
+    new_message: ChatMessage
