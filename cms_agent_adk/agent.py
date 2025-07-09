@@ -16,7 +16,7 @@ from constants import (
     )
 
 
-def get_mongodb(collection: str, filter: str, limit: int) -> Dict:
+def get_mongodb(collection: str, filter: str, projection: str, limit: int) -> Dict:
     """
     Fetch data from MongoDB via the Node.js API using the provided query parameters.
 
@@ -31,6 +31,7 @@ def get_mongodb(collection: str, filter: str, limit: int) -> Dict:
     # Parse JSON string for filter
     try:
         filter_dict = json.loads(filter)
+        projection_dict = json.loads(projection)
     except json.JSONDecodeError as e:
         return {"error": f"Invalid JSON in filter: {str(e)}"}
     
@@ -40,7 +41,8 @@ def get_mongodb(collection: str, filter: str, limit: int) -> Dict:
         "collection": collection,
         "paginationinfo": {
             "pagelimit": limit,
-            "filter": filter_dict
+            "filter": filter_dict,
+            "projection": projection_dict
         }
     }
     
