@@ -18,6 +18,7 @@ def get_prompt(agents: str) -> str:
             Important:
             - Your responses should be polite, varied, and conversational, not copied word-for-word from this prompt.
             - Do not forward these greeting messages to the CMS agent, handle them directly.
+            - If user conversation history contains talking about multiple projects then consider the most recent project if the project is not mentioned in the user query.
 
             Core Directives:
 

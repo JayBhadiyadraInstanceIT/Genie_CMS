@@ -37,6 +37,7 @@ def get_mongodb(collection: str, filter: str, projection: str, limit: int) -> Di
     
     # Construct the query dictionary for the Node.js API
     query = {
+        "isprod": 1,
         "dbname": REMOTE_1_AGENT_DATABASE_DBNAME,
         "collection": collection,
         "paginationinfo": {
