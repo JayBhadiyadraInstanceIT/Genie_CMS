@@ -3,8 +3,9 @@ import json
 import uuid
 import os
 import sys
-from datetime import datetime
-from typing import Any, AsyncIterable, List
+import requests
+from copy import deepcopy
+from typing import Any, AsyncIterable, List, Dict, Optional
 
 import httpx
 import nest_asyncio
@@ -25,7 +26,9 @@ from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService, DatabaseSessionService
 from google.adk.tools.tool_context import ToolContext
+from google.adk.tools import FunctionTool
 from google.genai import types
+from langfuse import observe, get_client
 
 from .remote_agent_connection import RemoteAgentConnections
 from .prompt import get_prompt
@@ -35,14 +38,26 @@ from constants import (
     HOST_AGENT_NAME,
     MODEL,
     REMOTE_1_AGENT_URL,
+    REMOTE_1_AGENT_NAME,
+    REMOTE_1_AGENT_DATABASE_API_URL,
+    REMOTE_1_AGENT_DATABASE_DBNAME,
+    HEADERS,
 )
 
 load_dotenv()
 nest_asyncio.apply()
+langfuse = get_client()
+headers = HEADERS
 
 
 class HostAgent:
     """The Host agent."""
+
+    ACCESS_MAP = {
+        "new customer": [REMOTE_1_AGENT_NAME, "AgentA", "AgentB"],
+        "existing prospect": [REMOTE_1_AGENT_NAME, "AgentB", "AgentC"],
+        "existing customer": [REMOTE_1_AGENT_NAME, "AgentA", "AgentB", "AgentC", "AgentD", "AgentE"],
+    }
 
     def __init__(
         self,
@@ -50,6 +65,7 @@ class HostAgent:
         self.remote_agent_connections: dict[str, RemoteAgentConnections] = {}
         self.cards: dict[str, AgentCard] = {}
         self.agents: str = ""
+        self.project_data: Optional[List[Dict]] = None 
         self._agent = self.create_agent()
         self._user_id = "host_agent"
         self._runner = Runner(
@@ -61,6 +77,8 @@ class HostAgent:
         )
 
     async def _async_init_components(self, remote_agent_addresses: List[str]):
+        await self._fetch_project_data_once() 
+
         async with httpx.AsyncClient(timeout=30) as client:
             for address in remote_agent_addresses:
                 card_resolver = A2ACardResolver(client, address)
@@ -81,7 +99,37 @@ class HostAgent:
             for card in self.cards.values()
         ]
         print("agent_info:", agent_info)
-        self.agents = "\n".join(agent_info) if agent_info else "No friends found"
+        self.agents = "\n".join(agent_info) if agent_info else "No remote agent found"
+
+    async def _fetch_project_data_once(self):
+        """Fetch project data only once during initialization."""
+        if self.project_data is not None:
+            print("Project data already fetched, skipping.")
+            return
+        print("Fetching the project name and project ID First time...")
+        query = {
+            "isprod": 1,
+            "dbname": REMOTE_1_AGENT_DATABASE_DBNAME,
+            "collection": "projects",
+            "paginationinfo": {
+                "pagelimit": 1000,
+                "filter": {},
+                "projection": {
+                    "ProjectName": 1,
+                    "ProjectID": 1,
+                    "_id": 0,
+                }
+            }
+        }
+        try:
+            response = requests.post(REMOTE_1_AGENT_DATABASE_API_URL, json=query, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            self.project_data = data if isinstance(data, list) else data.get("data")
+            print(f"Project data fetched successfully: {len(self.project_data)} entries.")
+        except requests.RequestException as e:
+            print(f"Project data fetch failed: {e}")
+            self.project_data = []
 
     @classmethod
     async def create(
@@ -91,6 +139,13 @@ class HostAgent:
         instance = cls()
         await instance._async_init_components(remote_agent_addresses)
         return instance
+    
+    def get_all_projects(self) -> Dict:
+        """Returns previously fetched project data."""
+        if self.project_data is None or not self.project_data:
+            return {"error": "Project data not available"}
+        return {"data": self.project_data}
+    get_all_projects_tool = FunctionTool(func=get_all_projects)
 
     def create_agent(self) -> Agent:
         return Agent(
@@ -105,9 +160,11 @@ class HostAgent:
 
 
     def root_instruction(self, context: ReadonlyContext) -> str:
-        return get_prompt(self.agents)
+        project_data = context.state.get("project_data", self.project_data or [])
+        return get_prompt(self.agents, project_data)
     
 
+    @observe(name="StreamInvocation")
     async def stream(
         self, query: str, session_id: str
     ) -> AsyncIterable[dict[str, Any]]:
@@ -120,13 +177,25 @@ class HostAgent:
             session_id=session_id,
         )
         content = types.Content(role="user", parts=[types.Part.from_text(text=query)])
+
+        initial_state = {"project_data": deepcopy(self.project_data)}
         if session is None:
             session = await self._runner.session_service.create_session(
                 app_name=self._agent.name,
                 user_id=self._user_id,
-                state={},
+                # state={},
+                state=initial_state,
                 session_id=session_id,
             )
+
+        else:
+            if not session.state.get("project_data") and self.project_data:
+                session.state["project_data"] = deepcopy(self.project_data)
+                print("Injected project_data into existing session")
+            elif not session.state.get("project_data"):
+                session.state["project_data"] = []
+                print("No project data available to inject into session.")
+
         async for event in self._runner.run_async(
             user_id=self._user_id, session_id=session.id, new_message=content
         ):
@@ -151,7 +220,19 @@ class HostAgent:
                 }
 
     async def send_message(self, agent_name: str, task: str, tool_context: ToolContext):
-        """Sends a task to a remote friend agent."""
+        """Sends a task to a remote agent."""
+        user_state = tool_context.state.get("user_state", "new customer")
+        allowed_agents = self.ACCESS_MAP.get(user_state, [])
+
+        if agent_name not in allowed_agents:
+            return [{
+                "type": "text",
+                "text": (
+                    "Access denied."
+                    f"As a **{user_state}**, you don't have access to **{agent_name}**."
+                )
+            }]
+
         if agent_name not in self.remote_agent_connections:
             raise ValueError(f"Agent {agent_name} not found")
         client = self.remote_agent_connections[agent_name]
@@ -178,7 +259,20 @@ class HostAgent:
         message_request = SendMessageRequest(
             id=message_id, params=MessageSendParams.model_validate(payload)
         )
-        send_response: SendMessageResponse = await client.send_message(message_request)
+        with langfuse.start_as_current_span(
+            name="host_to_remote", 
+            level="DEFAULT",
+            metadata={ 
+                "agent_role": "host", 
+                "agent_name": "HostAgent", 
+                "target_agent": agent_name 
+                } 
+            ) as span: 
+            span.update_trace( 
+                session_id=context_id, 
+                tags=["host_to_remote"],
+            )
+            send_response: SendMessageResponse = await client.send_message(message_request)
         print("send_response", send_response)
 
         if not isinstance(
@@ -198,6 +292,7 @@ class HostAgent:
         return resp
 
 
+@observe(name="HostAgentInvocation")
 def _get_initialized_host_agent_sync():
     """Synchronously creates and initializes the HostAgent."""
 
@@ -219,9 +314,7 @@ def _get_initialized_host_agent_sync():
     except RuntimeError as e:
         if "asyncio.run() cannot be called from a running event loop" in str(e):
             print(
-                f"Warning: Could not initialize HostAgent with asyncio.run(): {e}. "
-                "This can happen if an event loop is already running (e.g., in Jupyter). "
-                "Consider initializing HostAgent within an async function in your application."
+                f"Warning: Could not initialize HostAgent: {e}"
             )
         else:
             raise

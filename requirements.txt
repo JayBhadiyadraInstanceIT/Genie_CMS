@@ -13,3 +13,4 @@ pyaudio
 sseclient
 google-generativeai
 pydub
+langfuse
