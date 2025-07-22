@@ -46,7 +46,7 @@ class DatabaseAgentClient:
     
     def chat_loop(self):
         """Interactive chat loop."""
-        print("🤖 Database Query Agent Chat")
+        print("Database Query Agent Chat")
         print("Type 'quit' to exit, 'info' for agent information")
         print("-" * 50)
         
@@ -54,7 +54,7 @@ class DatabaseAgentClient:
         
         while True:
             try:
-                user_input = input("\n💬 You: ").strip()
+                user_input = input("\nYou: ").strip()
                 
                 if user_input.lower() in ['quit', 'exit', 'q']:
                     print("👋 Goodbye!")
@@ -63,26 +63,26 @@ class DatabaseAgentClient:
                 if user_input.lower() == 'info':
                     info = self.get_agent_info()
                     if info:
-                        print(f"\n🔍 Agent Info:")
+                        print(f"\nAgent Info:")
                         print(json.dumps(info, indent=2))
                     continue
                 
                 if not user_input:
                     continue
                 
-                print("🔄 Processing...")
+                print("Processing...")
                 response, context_id = self.send_message(user_input, context_id)
                 
                 if response:
-                    print(f"\n🤖 Agent: {self.extract_response_text(response)}")
+                    print(f"\nAgent: {self.extract_response_text(response)}")
                 else:
-                    print("❌ Failed to get response")
+                    print("Failed to get response")
                     
             except KeyboardInterrupt:
                 print("\n👋 Goodbye!")
                 break
             except Exception as e:
-                print(f"❌ Error: {e}")
+                print(f"Error: {e}")
     
     def extract_response_text(self, response):
         """Extract text from agent response."""
@@ -122,7 +122,7 @@ def main():
         # Start chat loop
         client.chat_loop()
     else:
-        print("❌ Could not connect to agent. Make sure it's running on http://localhost:10002")
+        print("Could not connect to agent. Make sure it's running on http://localhost:10002")
         print("\nTo start the agent, run:")
         print("python -m cms_agent_adk")
 
