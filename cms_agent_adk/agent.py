@@ -2,7 +2,7 @@ import sys
 import os
 from google.adk.agents import LlmAgent
 from prompt import instruction
-from cms_tools import get_mongodb_tool
+from cms_tools import get_mongodb_tool, send_email_tool
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from constants import (
@@ -15,7 +15,10 @@ def create_agent() -> LlmAgent:
     return LlmAgent(
         model=MODEL,
         name=REMOTE_1_AGENT_NAME,
-        description="Specialized agent for querying MongoDB collections via Node.js API",
+        description="Specialized agent for querying MongoDB collections via Node.js API, and mail the brohures to the user.",
         instruction = instruction,
-        tools=[get_mongodb_tool],
+        tools=[
+            get_mongodb_tool,
+            send_email_tool,
+            ],
     )

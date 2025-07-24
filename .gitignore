@@ -3,3 +3,4 @@ prestige_genie_venv/
 __pycache__/
 .venv/
 *.db
+.vscode/

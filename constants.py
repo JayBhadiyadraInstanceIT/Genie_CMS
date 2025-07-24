@@ -7,6 +7,7 @@ REMOTE_1_AGENT_DEFAULT_USER_ID = "database_agent_user"
 REMOTE_1_AGENT_DATABASE_API_URL = "http://192.168.1.132:3001/listalltabledata"
 # REMOTE_1_AGENT_DATABASE_DBNAME = "dev_cms"
 REMOTE_1_AGENT_DATABASE_DBNAME = "cms_prod"
+REMOTE_1_AGENT_EMAIL_API_URL = "http://192.168.1.132:3001/sendmail/document"
 
 HOST_AGENT_NAME = "Host_Agent"
 

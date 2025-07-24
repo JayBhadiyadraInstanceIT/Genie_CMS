@@ -3,7 +3,7 @@ import sys
 import requests
 import json
 
-from typing import Dict
+from typing import Dict, List, Any
 from dotenv import load_dotenv
 from google.adk.tools import FunctionTool
 from langfuse import observe, get_client
@@ -13,6 +13,7 @@ from constants import (
     REMOTE_1_AGENT_DATABASE_API_URL, 
     REMOTE_1_AGENT_DATABASE_DBNAME, 
     HEADERS,
+    REMOTE_1_AGENT_EMAIL_API_URL
 )
 
 load_dotenv()
@@ -65,5 +66,40 @@ def get_mongodb(collection: str, filter: str, projection: str, limit: int) -> Di
     except requests.RequestException as e:
         return {"error": f"API request failed: {str(e)}"}
 
+@observe(name="Send_Email_Tool", as_type="span")
+def send_email(to: str, cc: str, personname: str, subject: str, attachments: List[str]) -> Dict[str, Any]:
+    """
+    Send an email via your email-sending endpoint.
+
+    Args:
+        to (str): Recipient email address.
+        cc (str): CC recipient(s), empty string if none.
+        personname (str): Recipient's name for personalization.
+        subject (str): Email subject.
+        attachments (List[str]): List of attachment URLs.
+
+    Returns:
+        dict: Response from your email API or error info.
+    """
+    payload = {
+        "to": to,
+        "cc": cc,
+        "personname": personname,
+        "subject": subject,
+        "attachments": attachments
+    }
+    try:
+        resp = requests.post(REMOTE_1_AGENT_EMAIL_API_URL, json=payload, headers=headers)
+        resp.raise_for_status()
+        response_data = resp.json()
+        
+        if isinstance(response_data, list):
+            return {"data": response_data}
+        return response_data
+    except requests.RequestException as e:
+        return {"error": f"Email API request failed: {str(e)}"}
+    
+
 # Create a FunctionTool without the 'declaration' parameter
 get_mongodb_tool = FunctionTool(func=get_mongodb)
+send_email_tool = FunctionTool(func=send_email)

@@ -117,7 +117,7 @@ class HostAgent:
                 "projection": {
                     "ProjectName": 1,
                     "ProjectID": 1,
-                    "_id": 0,
+                    "_id": 1,
                 }
             }
         }
@@ -189,12 +189,18 @@ class HostAgent:
             )
 
         else:
-            if not session.state.get("project_data") and self.project_data:
+            # if not session.state.get("project_data") and self.project_data:
+            #     session.state["project_data"] = deepcopy(self.project_data)
+            #     print("Injected project_data into existing session")
+            # elif not session.state.get("project_data"):
+            #     session.state["project_data"] = []
+            #     print("No project data available to inject into session.")
+            if session.state.get("project_data") is None:
+                if not self.project_data:
+                    print("project_data is empty retrying fetch...")
+                    await self._fetch_project_data_once()
                 session.state["project_data"] = deepcopy(self.project_data)
-                print("Injected project_data into existing session")
-            elif not session.state.get("project_data"):
-                session.state["project_data"] = []
-                print("No project data available to inject into session.")
+                print(f"Injected project_data into session: {len(session.state["project_data"])} entries")
 
         async for event in self._runner.run_async(
             user_id=self._user_id, session_id=session.id, new_message=content
@@ -219,7 +225,7 @@ class HostAgent:
                     "updates": "The host agent is thinking...",
                 }
 
-    async def send_message(self, agent_name: str, task: str, tool_context: ToolContext):
+    async def send_message(self, agent_name: str, task: str, tool_context: ToolContext, **kwargs):
         """Sends a task to a remote agent."""
         user_state = tool_context.state.get("user_state", "new customer")
         allowed_agents = self.ACCESS_MAP.get(user_state, [])
