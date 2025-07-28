@@ -3,6 +3,8 @@ import os
 import requests
 from typing import Dict
 import jwt
+from jwt import PyJWTError
+from typing import List, Optional, Dict
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from constants import (
@@ -11,6 +13,7 @@ from constants import (
     ALGORITHM,
     TOKEN,
     AUDIENCE,
+    ISSUER,
     )
 
 
@@ -36,38 +39,60 @@ def load_public_key():
     with open("public_key.pem", "r") as f:
         return f.read()
 
-algorithms=ALGORITHM
-public_key = load_public_key()
-token = TOKEN
-audience=AUDIENCE
 
-def validate_token(token: str, public_key: str, algorithms:str,audience:str) -> Dict:
+# def validate_token(token: str, algorithms:str, audience:str) -> Dict:
+def validate_token(
+    token: str,
+    algorithms: List[str],
+    audience: Optional[str] = None,
+    issuer: Optional[str] = None,
+) -> Dict:
+    public_key = load_public_key()
     try:
-        payload = jwt.decode(token, key=public_key, algorithms=algorithms,audience=audience
-)
+        # payload = jwt.decode(token, key=public_key, algorithms=algorithms, audience=audience)
+        payload = jwt.decode(
+            token,
+            key=public_key,
+            algorithms=algorithms,
+            audience=audience,
+            issuer=issuer,
+        )
         return payload  # valid token
     except jwt.ExpiredSignatureError:
         return {"error": "Token has expired"}
     except jwt.InvalidTokenError as e:
         return {"error": f"Invalid token: {str(e)}"}
 
+# def verify_jwt(token: str) -> dict:
+#     try:
+#         payload = jwt.decode(
+#             token,
+#             public_key,
+#             algorithms=["RS256"],
+#             audience="your-audience-if-any",   # optional
+#             issuer="website"                  # should match your issuer header
+#         )
+#         return {"valid": True, "payload": payload}
+#     except PyJWTError as e:
+#         return {"valid": False, "error": str(e)}
 
-#for sample testing   
-if __name__ == "__main__":
-    #Decode and validate token
-    validated =validate_token(token, public_key, algorithms, audience)
-    print("validated Token:", validated)
+# #for sample testing   
+# if __name__ == "__main__":
+#     #Decode and validate token
+#     # validated =validate_token(token, public_key, algorithms, audience, issuer)
+#     validated =verify_jwt(token)
+#     print("validated Token:", validated)
 
-    if "error" in validated:
-        print("Token is invalid. Exiting test.")
-    else:
-        #check for required fields
-        required_fields = ["uid", "unqkey"]
-        if all(field in validated for field in required_fields):
-            #Send a test email using validated fields
-            print("Token is valid.")
-        else:
-            print("validated token missing required fields. Exiting.")
+#     if "error" in validated:
+#         print("Token is invalid. Exiting test.")
+#     else:
+#         #check for required fields
+#         required_fields = ["uid", "unqkey"]
+#         if all(field in validated for field in required_fields):
+#             #Send a test email using validated fields
+#             print("Token is valid.")
+#         else:
+#             print("validated token missing required fields. Exiting.")
 
 
 def authenticate_and_get_claims():
@@ -86,12 +111,13 @@ def authenticate_and_get_claims():
         }
     """
     access_info = get_access_token()
+    public_key = load_public_key()
     if not access_info or "error" in access_info or not access_info.get("token"):
         return {"error": "Failed to retrieve access token."}
     token = access_info["token"]
     uid = access_info["uid"]
     unqkey = access_info["unqkey"]
-    validated = validate_token(token, public_key, algorithms)
+    validated = validate_token(token, public_key, ALGORITHM)
     if "error" in validated:
         return {"error": "Invalid token."}
     return {

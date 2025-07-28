@@ -43,12 +43,20 @@ from constants import (
     REMOTE_1_AGENT_DATABASE_DBNAME,
     HEADERS,
 )
+# from schema import HostOutput
+from pydantic import ValidationError
+from datetime import datetime
 
 load_dotenv()
 nest_asyncio.apply()
 langfuse = get_client()
 headers = HEADERS
 
+class User:
+    """Simple User class for session management"""
+    def __init__(self, user_id: str):
+        self.id = user_id
+        self.created_at = datetime.now()
 
 class HostAgent:
     """The Host agent."""
@@ -62,19 +70,29 @@ class HostAgent:
     def __init__(
         self,
     ):
+        session_db_url = "sqlite:///./cms_host_agent_sessions.db"
+        print("Using session DB URL:", session_db_url)
         self.remote_agent_connections: dict[str, RemoteAgentConnections] = {}
         self.cards: dict[str, AgentCard] = {}
         self.agents: str = ""
         self.project_data: Optional[List[Dict]] = None 
         self._agent = self.create_agent()
         self._user_id = "host_agent"
+        self._users: dict[str, User] = {}
         self._runner = Runner(
             app_name=self._agent.name,
             agent=self._agent,
             artifact_service=InMemoryArtifactService(),
-            session_service=InMemorySessionService(),
+            # session_service=InMemorySessionService(),
+            session_service=DatabaseSessionService(db_url=session_db_url),
             memory_service=InMemoryMemoryService(),
         )
+
+    def _get_or_create_user(self, user_id: str) -> User:
+        """Get or create a user session"""
+        if user_id not in self._users:
+            self._users[user_id] = User(user_id)
+        return self._users[user_id]
 
     async def _async_init_components(self, remote_agent_addresses: List[str]):
         await self._fetch_project_data_once() 
@@ -205,24 +223,47 @@ class HostAgent:
         async for event in self._runner.run_async(
             user_id=self._user_id, session_id=session.id, new_message=content
         ):
+            # if event.is_final_response():
+            #     response = ""
+            #     if (
+            #         event.content
+            #         and event.content.parts
+            #         and event.content.parts[0].text
+            #     ):
+            #         response = "\n".join(
+            #             [p.text for p in event.content.parts if p.text]
+            #         )
+            #     yield {
+            #         "is_task_complete": True,
+            #         "content": response,
+            #     }
+            # else:
+            #     yield {
+            #         "is_task_complete": False,
+            #         "updates": "The host agent is thinking...",
+            #     }
+
             if event.is_final_response():
-                response = ""
-                if (
-                    event.content
-                    and event.content.parts
-                    and event.content.parts[0].text
-                ):
-                    response = "\n".join(
-                        [p.text for p in event.content.parts if p.text]
-                    )
+                output_data = None
+                parsed_data = None
+                try:
+                    if (
+                        event.content
+                        and event.content.parts
+                        and event.content.parts[0].text
+                    ):
+                        raw_text = event.content.parts[0].text
+                        parsed_data = json.loads(raw_text)
+                        # output_data = HostOutput(**parsed_data)
+                except (json.JSONDecodeError, ValidationError) as e:
+                    print(f"Error parsing structured output: {e}")
+                    # output_data = HostOutput(text=raw_text, project_inquiry=False)  # fallback
+                    # output_data = HostOutput(text=raw_text)  # fallback
+
                 yield {
                     "is_task_complete": True,
-                    "content": response,
-                }
-            else:
-                yield {
-                    "is_task_complete": False,
-                    "updates": "The host agent is thinking...",
+                    # "content": output_data.model_dump(),  # replace the output_data.dict() with output_data.model_dump() because of deprication of .dict()
+                    "content": parsed_data,
                 }
 
     async def send_message(self, agent_name: str, task: str, tool_context: ToolContext, **kwargs):
@@ -313,7 +354,8 @@ def _get_initialized_host_agent_sync():
             remote_agent_addresses=remote_agent_urls
         )
         print("HostAgent initialized")
-        return hosting_agent_instance.create_agent()
+        # return hosting_agent_instance.create_agent()
+        return hosting_agent_instance
 
     try:
         return asyncio.run(_async_main())
@@ -326,4 +368,7 @@ def _get_initialized_host_agent_sync():
             raise
 
 
-root_agent = _get_initialized_host_agent_sync()
+# root_agent = _get_initialized_host_agent_sync()
+
+host_agent_instance = _get_initialized_host_agent_sync()
+root_agent = host_agent_instance._agent

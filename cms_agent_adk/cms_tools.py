@@ -3,7 +3,7 @@ import sys
 import requests
 import json
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Tuple
 from dotenv import load_dotenv
 from google.adk.tools import FunctionTool
 from langfuse import observe, get_client
@@ -13,12 +13,92 @@ from constants import (
     REMOTE_1_AGENT_DATABASE_API_URL, 
     REMOTE_1_AGENT_DATABASE_DBNAME, 
     HEADERS,
-    REMOTE_1_AGENT_EMAIL_API_URL
+    REMOTE_1_AGENT_EMAIL_API_URL,
+    ALGORITHM,
+    TOKEN,
+    ISSUER,
+    AUDIENCE,
+    ACCESS_TOKEN_KEY,
+)
+
+from API_authentication import (
+    validate_token,
+    ACCESSTOKEN_API_URL,
+    ACCESS_TOKEN_HEADERS,
 )
 
 load_dotenv()
 langfuse = get_client()
 headers = HEADERS
+
+def fetch_new_token() -> Tuple[str, Dict[str, str]]:
+    """
+    POST to your ACCESSTOKEN_API_URL with the required headers:
+      - key    (your API key)
+      - issuer (your issuer string)
+    Returns (new_token, {"uid":..., "unqkey":...})
+    """
+    headers = {
+        "key": ACCESS_TOKEN_KEY,
+        "issuer": ISSUER,
+    }
+    resp = requests.post(ACCESSTOKEN_API_URL, headers=headers)
+    resp.raise_for_status()
+
+    # the fresh JWT comes back in the response headers under "token"
+    new_token = resp.headers.get("token")
+    if not new_token:
+        raise RuntimeError("accesstoken API did not return a token header")
+
+    # uid/unqkey live in the JSON body at data.uid / data.unqkey
+    body = resp.json()
+    data = body.get("data", {})
+    uid    = data.get("uid")
+    unqkey = data.get("unqkey")
+    if not uid or not unqkey:
+        raise RuntimeError("accesstoken API did not return uid/unqkey in body")
+
+    return new_token, {"uid": uid, "unqkey": unqkey}
+
+def get_valid_token_and_payload() -> Tuple[str, Dict]:
+    """
+    1. Try your existing TOKEN constant.
+    2. If it's expired → fetch_new_token().
+    3. If it fails for any other reason → raise.
+    """
+
+    # try the current
+    result = validate_token(
+        token=TOKEN,
+        algorithms=ALGORITHM,
+        audience=AUDIENCE,
+        issuer=ISSUER
+    )
+
+    if "error" not in result:
+        return TOKEN, result
+
+    err = result["error"].lower()
+    if "expired" in err:
+        # expired → get a fresh one
+        fresh_token, extra_claims = fetch_new_token()
+
+        # re-validate it
+        new_payload = validate_token(
+            token=fresh_token,
+            algorithms=ALGORITHM,
+            audience=AUDIENCE,
+            issuer=ISSUER
+        )
+        if "error" in new_payload:
+            raise RuntimeError(f"Refreshed token invalid: {new_payload['error']}")
+
+        # merge in the uid/unqkey from the refresh response:
+        new_payload.update(extra_claims)
+        return fresh_token, new_payload
+
+    # some other JWT error (bad audience, bad signature, etc.)
+    raise RuntimeError(f"Token validation failed: {result['error']}")
 
 @observe(name="MongoDB fetch Tool", as_type="span")
 def get_mongodb(collection: str, filter: str, projection: str, limit: int) -> Dict:
@@ -33,6 +113,21 @@ def get_mongodb(collection: str, filter: str, projection: str, limit: int) -> Di
     Returns:
         dict: The data fetched from the MongoDB database via the API, or an error message.
     """
+    # validate token
+    try:
+        token, jwt_payload = get_valid_token_and_payload()
+    except Exception as e:
+        # Return the JWT error back to caller
+        return {"error": str(e)}
+    
+    uid    = jwt_payload.get("uid")
+    unqkey = jwt_payload.get("unqkey")
+    # validate token
+    # validation_result = validate_token(token=TOKEN, algorithms=ALGORITHM, audience=AUDIENCE, issuer=ISSUER)
+    # print("validation_result", validation_result)
+    # if "error" in validation_result:
+    #     return {"error": f"Token validation failed: {validation_result['error']}"}
+
     langfuse.update_current_span(level="DEBUG")
     # Parse JSON string for filter
     try:

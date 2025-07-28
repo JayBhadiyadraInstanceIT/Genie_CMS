@@ -247,26 +247,26 @@ instruction = f"""
                 - If no relevant data is found, respond with a helpful fallback message such as:
                 "There is no current offer information available at the moment. You can choose any option from the menu below."
                 Then, on a **separate line**, include the following JSON:
-                {{"flag": "project_inquiry"}}
+                {{"project_inquiry": True}}, only include if data is not available DO NOT ADD IF DATA FOUND.
 
             - For queries about sample flat images or construction site images (e.g., "Do you have sample flat images?", "Please show construction site images."):
                 - Respond with the images or relevant data if available.
                 - If no data is found, respond with a fallback message:
                 "Sorry, no images were found. You can choose any option from the menu below."
                 Then, on a **separate line**, include:
-                {{"flag": "project_inquiry"}}
+                {{"project_inquiry": True}}, only include if data is not available DO NOT ADD IF DATA FOUND.
 
             - For construction status queries (e.g., "What is the current construction status of X project?", "Is the project under construction?"):
                 - If data is available, provide the construction update.
                 - If no data is available, respond with:
                 "I couldn't find the construction status for that project. You can choose any option from the menu below."
                 Then, on a **separate line**, include:
-                {{"flag": "project_inquiry"}}
+                {{"project_inquiry": True}}, only include if data is not available DO NOT ADD IF DATA FOUND.
 
             - For queries about availability (e.g., "Is there a 2BHK available?", "Any units still available in Y project?"):
                 - Respond with availability information if found.
                 - If no availability data is found, respond as usual but append this JSON on a **separate line**:
-                {{"flag": "project_inquiry"}}
+                {{"project_inquiry": True}}, only include if data is not available DO NOT ADD IF DATA FOUND.
 
 
             Here are some example queries and their expected collection matches for reference:
